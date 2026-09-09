@@ -58,6 +58,28 @@ bun run at 30                   # correct the pick counter
 bun run reset                   # start over
 ```
 
+### Watching your queue
+
+Register a third watcher on Yahoo's **Queue** panel — Cmd+Shift+Y, and put the
+word "queue" in its name, since queue rows look identical to pool rows and the
+label is the only reliable signal.
+
+The UI then shows your queue in your order, with the odds each player survives
+until your next turn, and says something about it:
+
+- **When the order disagrees with the board**, which player to move and why —
+  the largest displacement, not just the top slot, because a queue can be right
+  about its first pick and wrong below it.
+- **When the order already matches**, the fact most likely to change it: someone
+  who will not survive the wait while the player above them will, a bye stack,
+  a queue that is entirely bench depth while a starting slot sits open, or a
+  player the market has stopped taking.
+
+Every note spells out the reasoning rather than issuing a verdict. The point is
+that you can disagree with it — "take the player who will not last before the
+better player who will" is an argument, and you should be able to see whether
+it holds before acting on it.
+
 ### How it stays current without you
 
 | what | how |

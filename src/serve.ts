@@ -2,6 +2,7 @@ import { buildBoard } from "./board";
 import { readSources } from "./sources";
 import { loadState, saveState, picksUntilNextTurn, rosterNeed } from "./state";
 import { recommend } from "./recommend";
+import { analyzeQueue } from "./queue";
 import { deriveLeagueFromMarkers, detectPick } from "./yahoo";
 import { diffDrafted } from "./events";
 import type { Opts } from "./options";
@@ -38,11 +39,17 @@ async function snapshot(opts: Opts, board: Board) {
 
   const avail = (src.pool?.players ?? []).filter((p) => !state.drafted.includes(p.name));
   const mine = board.players.filter((p) => state.myPicks.includes(p.name));
+  const queueNames = (src.queue?.players ?? []).map((p) => p.name);
+  const queueAnalysis = queueNames.length
+    ? analyzeQueue(board, state, avail, queueNames, picksUntilNextTurn(board.config, state.currentPick))
+    : null;
+
   return {
     filtered: false,
     state,
     src,
     mine,
+    queueAnalysis,
     wait: picksUntilNextTurn(board.config, state.currentPick),
     recs: recommend(board, state, avail, 8),
     need: rosterNeed(board.config, mine).open,
@@ -64,6 +71,20 @@ const PAGE = `<!doctype html><meta charset=utf-8><title>draft-drift</title>
  .slot .k{width:44px;color:#7B8091;font-family:monospace}
  .ok{color:#4FD8C4}.warn{color:#F5A623}
  #meta{color:#7B8091;font-size:10.5px;font-family:monospace;margin-top:12px}
+ .q{display:flex;gap:8px;align-items:baseline;padding:4px 9px;border-left:2px solid #282D3A;margin-bottom:3px}
+ .q .i{color:#7B8091;font-family:monospace;font-size:11px;width:14px}
+ .q .n{flex:1}
+ .q .s{font-family:monospace;font-size:11px;color:#7B8091}
+ .q.risk{border-left-color:#F5A623}
+ .q.risk .s{color:#F5A623}
+ .note{padding:8px 10px;border-radius:6px;margin-bottom:6px;background:#1E212C;border:1px solid #282D3A}
+ .note.reorder{border-color:#F5A623}
+ .note.warning{border-color:#E5484D}
+ .note h4{margin:0 0 4px;font-size:12.5px;font-weight:600}
+ .note.reorder h4{color:#F5A623}
+ .note.warning h4{color:#E5484D}
+ .note p{margin:0;font-size:11.5px;color:#B9BDC9;line-height:1.45}
+ .ok{color:#4FD8C4;font-size:11.5px;padding:2px 9px}
 </style><body><div id=app>loading…</div><script>
 async function tick(){
  try{
@@ -78,6 +99,18 @@ async function tick(){
    h+='<div class="r'+(i==0?' top':'')+'"><span class="n">'+(i+1)+'. '+r.name+'</span><span class="m">'+r.pos+' &middot; VOR '+r.vor+' &middot; T'+r.tier+'</span></div>';
    h+='<div class="why">'+r.why+'</div>';
   });
+  if(d.queue){
+   h+='<h2>Your queue'+(d.queue.orderMatches?' &middot; order matches the board':'')+'</h2>';
+   d.queue.rows.forEach((r,i)=>{
+    const risk=r.survival<0.35;
+    h+='<div class="q'+(risk?' risk':'')+'"><span class="i">'+(i+1)+'</span>'+
+       '<span class="n">'+r.name+'</span>'+
+       '<span class="s">'+r.pos+' &middot; '+Math.round(r.survival*100)+'% lasts</span></div>';
+   });
+   d.queue.notes.forEach(n=>{
+    h+='<div class="note '+n.kind+'"><h4>'+n.headline+'</h4><p>'+n.because+'</p></div>';
+   });
+  }
   h+='<h2>Roster</h2>';
   for(const s of d.roster)h+='<div class="slot"><span class="k '+(s.full?'ok':'warn')+'">'+s.pos+' '+s.have+'/'+s.want+'</span><span>'+s.names+'</span></div>';
   h+='<div id=meta>need: '+d.need+' &middot; pool '+d.pool+' &middot; capture '+d.age+'s old</div>';
@@ -108,6 +141,13 @@ export async function serve(opts: Opts): Promise<void> {
           age,
           pool: s.src.pool?.players.length ?? 0,
           need: Object.entries(s.need ?? {}).filter(([, v]) => v && v > 0).map(([k, v]) => `${k}x${v}`).join(", ") || "complete",
+          queue: s.queueAnalysis
+            ? {
+                orderMatches: s.queueAnalysis.orderMatches,
+                rows: s.queueAnalysis.queue,
+                notes: s.queueAnalysis.notes,
+              }
+            : null,
           recs: s.recs.map((r) => ({
             name: r.player.name,
             pos: `${r.player.pos}${r.player.posRank} ${r.player.team ?? ""}`,

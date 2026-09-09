@@ -45,6 +45,8 @@ export interface Sources {
   pool: Source | null;
   /** The user's own roster pane, if they're watching it. */
   roster: Source | null;
+  /** The user's queue, if they're watching it — their own stated priority. */
+  queue: Source | null;
   all: Source[];
   /** True when the pool looked filtered (search or position tab) and was rejected. */
   filtered: boolean;
@@ -62,7 +64,7 @@ export async function readSources(board: Player[]): Promise<Sources> {
   try {
     files = (await readdir(WATCH_DIR)).filter((f) => f.endsWith(".json") && f !== "latest.json");
   } catch {
-    return { pool: null, roster: null, all: [], filtered: false, filterReason: "" };
+    return { pool: null, roster: null, queue: null, all: [], filtered: false, filterReason: "" };
   }
 
   // A watcher whose page has gone leaves its file behind — the in-page timer
@@ -124,9 +126,12 @@ export async function readSources(board: Player[]): Promise<Sources> {
     all.find((s) => /your team\s*\(/i.test(s.text)) ??
     byLabel(/roster|my team|my squad/i) ??
     null;
+  // The queue is small and ordered; the label is the only reliable signal,
+  // since its rows look exactly like the pool's.
+  const queue = all.find((s) => s !== roster && /queue/i.test(s.label)) ?? null;
   let pool =
     byLabel(/player|available|pool|board/i) ??
-    all.filter((s) => s !== roster).sort((a, b) => b.players.length - a.players.length)[0] ??
+    all.filter((s) => s !== roster && s !== queue).sort((a, b) => b.players.length - a.players.length)[0] ??
     null;
 
   if (!roster) warn("no_roster_watcher", { watchers: all.map((s) => s.label) });
@@ -145,6 +150,6 @@ export async function readSources(board: Player[]): Promise<Sources> {
     pool = null;
   }
 
-  return { pool, roster, all, filtered, filterReason };
+  return { pool, roster, queue, all, filtered, filterReason };
 
 }

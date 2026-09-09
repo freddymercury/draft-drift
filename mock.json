@@ -3,7 +3,7 @@
   "league_id": "mock",
   "draft_time": "",
   "pick_clock_seconds": 60,
-  "teams": 12,
+  "teams": 14,
   "scoring": "half_ppr",
   "roster": {
     "QB": 1,
@@ -25,7 +25,7 @@
     "WR": 0.45,
     "TE": 0.1
   },
-  "my_draft_slot": 7,
+  "my_draft_slot": 4,
   "scoring_detail": {
     "notes": "Yahoo public mock defaults — adjust teams/roster to whatever the lobby actually uses."
   }
