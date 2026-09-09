@@ -103,7 +103,13 @@ export async function readSources(board: Player[]): Promise<Sources> {
   }
 
   const byLabel = (re: RegExp) => all.find((s) => re.test(s.label));
-  const roster = byLabel(/roster|my team|my squad/i) ?? null;
+  // Content first, then the label. A watcher keeps an auto-generated name when
+  // the user skips the naming prompt, and the roster pane is unmistakable in
+  // its own text — Yahoo heads it "YOUR TEAM (4/15)".
+  const roster =
+    all.find((s) => /your team\s*\(/i.test(s.text)) ??
+    byLabel(/roster|my team|my squad/i) ??
+    null;
   let pool =
     byLabel(/player|available|pool|board/i) ??
     all.filter((s) => s !== roster).sort((a, b) => b.players.length - a.players.length)[0] ??
