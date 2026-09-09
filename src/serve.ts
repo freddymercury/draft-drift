@@ -2,7 +2,7 @@ import { buildBoard } from "./board";
 import { readSources } from "./sources";
 import { loadState, saveState, picksUntilNextTurn, rosterNeed } from "./state";
 import { recommend } from "./recommend";
-import { detectPick } from "./yahoo";
+import { deriveLeagueFromMarkers, detectPick } from "./yahoo";
 import { diffDrafted } from "./events";
 import type { Opts } from "./options";
 import type { Board } from "./types";
@@ -22,6 +22,11 @@ async function snapshot(opts: Opts, board: Board) {
     }
   }
   if (src.pool) {
+    const derived = deriveLeagueFromMarkers(src.pool.text);
+    if (derived) {
+      board.config.teams = derived.teams;
+      board.config.my_draft_slot = derived.slot;
+    }
     const det = detectPick(src.pool.title, src.pool.text, board.config.teams, board.config.my_draft_slot);
     if (det) state.currentPick = det.pick;
     const prev = board.players.filter((p) => (state.lastSeen ?? []).includes(p.name));

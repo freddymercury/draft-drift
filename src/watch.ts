@@ -5,7 +5,7 @@ import { loadState, picksUntilNextTurn } from "./state";
 import { readCapture, playersInCapture, ageMinutes, CAPTURE_PATH } from "./parse";
 import { readSources } from "./sources";
 import { info, warn } from "./log";
-import { detectPick } from "./yahoo";
+import { deriveLeagueFromMarkers, detectPick } from "./yahoo";
 import { diffDrafted, appendEvents } from "./events";
 import type { DraftEvent } from "./events";
 import { saveState } from "./state";
@@ -52,6 +52,19 @@ export async function runOnce(opts: Opts, board?: Board): Promise<void> {
     return;
   }
   const state = await loadState(opts.statePath);
+
+  // Yahoo's markers beat the hand-entered config. Getting teams or slot wrong
+  // silently corrupts every "picks until your turn" figure and all the tier
+  // scarcity built on it, and it has been wrong for two mocks running.
+  const derived = src.pool ? deriveLeagueFromMarkers(src.pool.text) : null;
+  if (derived && (derived.teams !== b.config.teams || derived.slot !== b.config.my_draft_slot)) {
+    console.log(
+      `  ⚠️  config says ${b.config.teams} teams / slot ${b.config.my_draft_slot}, ` +
+        `Yahoo says ${derived.teams} / slot ${derived.slot} — using Yahoo`,
+    );
+    b.config.teams = derived.teams;
+    b.config.my_draft_slot = derived.slot;
+  }
 
   // A roster watcher makes the one remaining manual step go away: we can read
   // what the user actually drafted instead of being told.

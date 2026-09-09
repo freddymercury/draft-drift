@@ -173,3 +173,37 @@ export function detectPick(
 
   return null;
 }
+
+
+/**
+ * Work out the league size and draft slot from Yahoo's own turn markers.
+ *
+ * The config is hand-entered and has been wrong for two mocks running, which
+ * silently corrupts every "picks until your turn" figure and all the tier
+ * scarcity that depends on it. The markers are authoritative: consecutive gaps
+ * in a snake alternate 2*(teams-slot)+1 and 2*(slot-1)+1, which sum to 2*teams
+ * and pin both numbers exactly.
+ */
+export function deriveLeagueFromMarkers(text: string): { teams: number; slot: number } | null {
+  const marks = [...text.matchAll(/YOUR TURN - (\d+)(?:ST|ND|RD|TH) PICK/gi)].map((m) => Number(m[1]));
+  if (marks.length < 3) return null;
+  const gaps: number[] = [];
+  for (let i = 1; i < marks.length; i++) gaps.push(marks[i]! - marks[i - 1]!);
+
+  const a = gaps[0]!;
+  const b = gaps[1]!;
+  // A consistent snake alternates exactly two gap sizes.
+  for (let i = 2; i < gaps.length; i++) {
+    if (gaps[i] !== (i % 2 === 0 ? a : b)) return null;
+  }
+  const teams = (a + b) / 2;
+  if (!Number.isInteger(teams) || teams < 2 || teams > 20) return null;
+
+  // The first gap after a pick is the one going back down the snake.
+  const slot = teams - (a - 1) / 2;
+  if (!Number.isInteger(slot) || slot < 1 || slot > teams) return null;
+
+  // Confirm against the markers themselves rather than trusting the algebra.
+  const sched = turnSchedule(teams, slot, Math.ceil((marks[marks.length - 1]! + teams) / teams));
+  return marks.every((m) => sched.includes(m)) ? { teams, slot } : null;
+}
