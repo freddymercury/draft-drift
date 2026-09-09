@@ -16,6 +16,8 @@ export interface Config {
   flex_eligible: Position[];
   flex_split: Partial<Record<Position, number>>;
   my_draft_slot: number | null;
+  /** Pin the NFL season. Omit to resolve it from Sleeper at fetch time. */
+  season?: string;
   scoring_detail?: unknown;
 }
 

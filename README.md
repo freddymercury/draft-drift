@@ -116,6 +116,16 @@ Set `mock.json` to match whatever the Yahoo lobby actually uses. If it doesn't
 match, the snake math and tier-scarcity urgency will both be wrong, and you'll
 be testing a model that isn't the one you'll draft with.
 
+## Configuration
+
+`config.json` holds your league. Everything else is a compiled-in constant —
+see **[docs/configuration.md](docs/configuration.md)** for the complete list of
+ports, heuristics and scoring multipliers, including which ones are unvalidated.
+
+The NFL season is resolved from Sleeper at fetch time rather than pinned, so the
+board does not silently build from a stale season next year. Override with
+`"season": "2027"` in the config if needed.
+
 ## Data sources
 
 - **Sleeper** `pts_half_ppr` season projections + player DB (injury tags). Free, no auth.

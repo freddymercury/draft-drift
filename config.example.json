@@ -1,7 +1,6 @@
 {
   "league_name": "My League",
   "league_id": "000000",
-  "draft_time": "2026-09-03T22:00:00-04:00",
   "pick_clock_seconds": 60,
   "teams": 10,
   "scoring": "half_ppr",

@@ -34,16 +34,22 @@ const { cmd, rest, opts } = parsed;
 const tag = opts.label ? `[${opts.label}] ` : "";
 
 switch (cmd) {
-  case "fetch":
-    await fetchAll();
+  case "fetch": {
+    const cfg = (await Bun.file(opts.configPath).json()) as { season?: string };
+    await fetchAll(cfg.season);
     break;
+  }
   case "build":
     await writeBoard(await buildBoard(opts), opts);
     break;
-  case "all":
-    await fetchAll();
+  case "all": {
+    // Read the config directly; buildBoard would fail here on a first run,
+    // before any projections have been fetched.
+    const cfg = (await Bun.file(opts.configPath).json()) as { season?: string };
+    await fetchAll(cfg.season);
     await writeBoard(await buildBoard(opts), opts);
     break;
+  }
   case "serve":
     await serve(opts);
     await new Promise(() => {});
