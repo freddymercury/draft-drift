@@ -1,7 +1,7 @@
 import { buildBoard } from "./board";
 import type { Board } from "./types";
 import type { Opts } from "./options";
-import { loadState, picksUntilNextTurn } from "./state";
+import { loadState, picksUntilNextTurn, rosterNeed } from "./state";
 import { readCapture, playersInCapture, ageMinutes, CAPTURE_PATH } from "./parse";
 import { readSources } from "./sources";
 import { info, warn } from "./log";
@@ -60,9 +60,20 @@ export async function runOnce(opts: Opts, board?: Board): Promise<void> {
     // Refusing outright throws away two things we still know: what the filter
     // is showing, and what the board looked like before it was applied.
     const pos = src.filteredView?.players[0]?.pos;
+    // A filter is a phase of the workflow, not a fault. If it is showing a
+    // position still needed, it is doing exactly the right thing and saying
+    // "clear the filter" every few seconds is just nagging.
+    const mineNow = b.players.filter((p) => state.myPicks.includes(p.name));
+    const { open: openNow } = rosterNeed(b.config, mineNow);
+    const deliberate = pos ? (openNow[pos] ?? 0) > 0 : false;
+
     console.log("\n" + "═".repeat(64));
-    console.log(`  ⚠️  FILTERED VIEW — ${src.filterReason.toUpperCase()}`);
-    console.log(`      This is not the full board. Clear the filter for a complete picture.`);
+    if (deliberate) {
+      console.log(`  FILTERED TO ${pos} — and you still need one. Showing the best.`);
+    } else {
+      console.log(`  ⚠️  FILTERED VIEW — ${src.filterReason.toUpperCase()}`);
+      console.log(`      Not the full board, and ${pos ?? "this position"} is already filled.`);
+    }
     console.log("═".repeat(64));
 
     if (src.filteredView?.players.length && pos) {
@@ -85,7 +96,11 @@ export async function runOnce(opts: Opts, board?: Board): Promise<void> {
         const p = r.player;
         console.log(`    ${i + 1}. ${p.name.padEnd(22)} ${p.pos}${p.posRank}  VOR ${p.vor}  — ${r.reasons.join(" · ")}`);
       });
-      console.log(`\n  Clear the filter for a current board.`);
+      console.log(
+        deliberate
+          ? `\n  Clear the filter when you are done with ${pos}.`
+          : `\n  Clear the filter for a current board.`,
+      );
     }
     return;
   }

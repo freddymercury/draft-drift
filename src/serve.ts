@@ -85,6 +85,16 @@ const PAGE = `<!doctype html><meta charset=utf-8><title>draft-drift</title>
  .note.warning h4{color:#E5484D}
  .note p{margin:0;font-size:11.5px;color:#B9BDC9;line-height:1.45}
  .ok{color:#4FD8C4;font-size:11.5px;padding:2px 9px}
+ .sbs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+ .sbs h3{margin:0 0 6px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#7B8091;font-weight:600}
+ .cell{display:flex;gap:6px;align-items:baseline;padding:5px 7px;border-radius:5px;margin-bottom:3px;background:#1E212C;border:1px solid #282D3A;font-size:11.5px}
+ .cell .i{color:#7B8091;font-family:monospace;font-size:10px;width:11px;flex-shrink:0}
+ .cell .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .cell .m{font-family:monospace;font-size:9.5px;color:#7B8091;flex-shrink:0}
+ .cell.both{border-color:#4FD8C4}
+ .cell.only{border-color:#F5A623}
+ .cell.only .m{color:#F5A623}
+ .legend{font-size:9.5px;color:#7B8091;margin:4px 0 2px;font-family:monospace}
 </style><body><div id=app>loading…</div><script>
 async function tick(){
  try{
@@ -100,13 +110,25 @@ async function tick(){
    h+='<div class="why">'+r.why+'</div>';
   });
   if(d.queue){
-   h+='<h2>Your queue'+(d.queue.orderMatches?' &middot; order matches the board':'')+'</h2>';
+   const qn=d.queue.rows.map(r=>r.name);
+   const bn=d.recs.map(r=>r.name);
+   h+='<h2>Queue vs board'+(d.queue.orderMatches?' &middot; order matches':'')+'</h2>';
+   h+='<div class="sbs"><div><h3>your queue</h3>';
    d.queue.rows.forEach((r,i)=>{
-    const risk=r.survival<0.35;
-    h+='<div class="q'+(risk?' risk':'')+'"><span class="i">'+(i+1)+'</span>'+
+    const inBoth=bn.includes(r.name);
+    h+='<div class="cell'+(inBoth?' both':'')+'"><span class="i">'+(i+1)+'</span>'+
        '<span class="n">'+r.name+'</span>'+
-       '<span class="s">'+r.pos+' &middot; '+Math.round(r.survival*100)+'% lasts</span></div>';
+       '<span class="m">'+Math.round(r.survival*100)+'%</span></div>';
    });
+   h+='</div><div><h3>board says</h3>';
+   d.recs.slice(0,Math.max(d.queue.rows.length,5)).forEach((r,i)=>{
+    const queued=qn.includes(r.name);
+    h+='<div class="cell'+(queued?' both':' only')+'"><span class="i">'+(i+1)+'</span>'+
+       '<span class="n">'+r.name+'</span>'+
+       '<span class="m">'+(queued?r.vor:'not queued')+'</span></div>';
+   });
+   h+='</div></div>';
+   h+='<div class="legend">teal = in both &middot; amber = board wants it, you have not queued it &middot; % = odds of lasting</div>';
    d.queue.notes.forEach(n=>{
     h+='<div class="note '+n.kind+'"><h4>'+n.headline+'</h4><p>'+n.because+'</p></div>';
    });
