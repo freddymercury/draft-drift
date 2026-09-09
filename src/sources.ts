@@ -65,6 +65,12 @@ export async function readSources(board: Player[]): Promise<Sources> {
     return { pool: null, roster: null, all: [], filtered: false, filterReason: "" };
   }
 
+  // A watcher whose page has gone leaves its file behind — the in-page timer
+  // dies with the tab, so no tombstone is sent and nothing cleans up. Without
+  // an age check, recommendations keep being made from a board frozen at
+  // whatever the page last showed.
+  const MAX_AGE_SECONDS = 600;
+
   const all: Source[] = [];
   for (const f of files) {
     const data = (await Bun.file(`${WATCH_DIR}/${f}`).json()) as Record<string, string>;
@@ -90,6 +96,14 @@ export async function readSources(board: Player[]): Promise<Sources> {
     }
     if (rows.length && matched.length === 0) {
       warn("parse_yield_zero", { w: label, rows: rows.length });
+    }
+
+    const ageSeconds = data.capturedAt
+      ? (Date.now() - Date.parse(String(data.capturedAt))) / 1000
+      : Number.POSITIVE_INFINITY;
+    if (ageSeconds > MAX_AGE_SECONDS) {
+      warn("watcher_abandoned", { w: data.label ?? f, ageMinutes: Math.round(ageSeconds / 60) });
+      continue;
     }
 
     all.push({

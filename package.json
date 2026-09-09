@@ -12,7 +12,8 @@
     "rec": "bun run src/cli.ts rec",
     "pick": "bun run src/cli.ts pick",
     "reset": "bun run src/cli.ts reset",
-    "at": "bun run src/cli.ts at"
+    "at": "bun run src/cli.ts at",
+    "grade": "bun run scripts/grade-draft.ts"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
