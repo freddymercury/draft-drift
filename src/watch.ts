@@ -10,6 +10,7 @@ import { diffDrafted, appendEvents } from "./events";
 import type { DraftEvent } from "./events";
 import { saveState } from "./state";
 import { recommend, renderRecs, renderRoster } from "./recommend";
+import { analyzeQueue } from "./queue";
 
 /**
  * AgentEyes has no push — it just rewrites ~/.agenteyes/context.json. Poll its
@@ -187,6 +188,22 @@ export async function runOnce(opts: Opts, board?: Board): Promise<void> {
     console.log("\n  *** YOUR PICK — ON THE CLOCK ***\u0007");
   } else if (wait > 0 && wait <= 3) {
     console.log(`\n  *** ${wait} PICK${wait === 1 ? "" : "S"} UNTIL YOUR TURN ***\u0007`);
+  }
+
+  // The queue belongs in the CLI too — the hook reads this path, so a panel
+  // only in the web UI is invisible to the agent.
+  if (src.queue?.players.length) {
+    const q = analyzeQueue(b, state, available, src.queue.players.map((p) => p.name), wait);
+    console.log("");
+    console.log(`YOUR QUEUE${q.orderMatches ? " · order matches the board" : ""}`);
+    q.queue.forEach((r, i) => {
+      const risk = r.survival < 0.35 ? "  <-- may not last" : "";
+      console.log(`  ${i + 1}. ${r.name.padEnd(22)} ${r.pos.padEnd(6)} ${Math.round(r.survival * 100)}% lasts${risk}`);
+    });
+    for (const n of q.notes) {
+      console.log(`\n  [${n.kind}] ${n.headline}`);
+      console.log(`     ${n.because}`);
+    }
   }
 
   console.log("");

@@ -88,15 +88,24 @@ export function analyzeQueue(
     });
     if (worst) {
       const { p, from, to } = worst as { p: Player; from: number; to: number };
-      const displaced = queued[to]!;
+      const myScore = scoreOf.get(p.name) ?? 0;
+      // Name someone he actually outranks. Using whoever currently sits in the
+      // target slot produces a contradiction when that player scores higher:
+      // "move Cook above McCaffrey, who scores more than Cook".
+      const leapfrogged = queued
+        .slice(to, from)
+        .filter((o) => (scoreOf.get(o.name) ?? 0) < myScore)
+        .sort((a, z) => (scoreOf.get(a.name) ?? 0) - (scoreOf.get(z.name) ?? 0));
+      const displaced = leapfrogged[0] ?? queued[to]!;
       const fills = (open[p.pos] ?? 0) > 0;
       notes.push({
         kind: "reorder",
         player: p.name,
         headline: `move ${p.name} up — ${from + 1} to ${to + 1}`,
         because:
-          `Scores ${Math.round(scoreOf.get(p.name) ?? 0)} against ${Math.round(scoreOf.get(displaced.name) ?? 0)} ` +
+          `Scores ${Math.round(myScore)} against ${Math.round(scoreOf.get(displaced.name) ?? 0)} ` +
           `for ${displaced.name}, on VOR ${p.vor} vs ${displaced.vor}` +
+          (leapfrogged.length > 1 ? ` — and ${leapfrogged.length} players above him score lower` : "") +
           (fills
             ? `, and he fills an open ${p.pos}.`
             : `. Neither fills a starting slot, so this is about raw value.`),
@@ -107,6 +116,22 @@ export function analyzeQueue(
   // 2. The angle that most often changes a correct order: who will not last.
   const doomed = rows.filter((r) => r.survival < 0.35);
   const safe = rows.filter((r) => r.survival > 0.8);
+
+  // Say so even without a safe counterpart. Requiring both meant a queue where
+  // everyone is at risk produced no risk note at all, and then a fallback
+  // claiming nobody was — the output contradicting its own numbers.
+  if (doomed.length && !safe.length) {
+    notes.push({
+      kind: "warning",
+      player: doomed[0]!.name,
+      headline: `${doomed.length} of these probably will not last ${wait} picks`,
+      because:
+        `${doomed.map((d) => d.name).join(", ")} are unlikely to survive to your next turn. ` +
+        `Nobody in the queue is safe either, so this is not about order — it is that you ` +
+        `will get roughly one of them. Put the one you actually want first.`,
+    });
+  }
+
   if (doomed.length && safe.length) {
     const d = doomed[0]!;
     const s = safe[0]!;
@@ -183,13 +208,16 @@ export function analyzeQueue(
   }
 
   if (!notes.length) {
+    const atRisk = rows.filter((r) => r.survival < 0.5);
     notes.push({
       kind: "angle",
       player: queued[0]?.name ?? "",
       headline: orderMatches ? "order looks right" : "nothing pressing",
-      because:
-        `Nobody in the queue is at real risk over ${wait} picks, no bye stacking, ` +
-        `and each fills a slot you need. Take them in order.`,
+      because: atRisk.length
+        ? `${atRisk.map((r) => r.name).join(", ")} may not last ${wait} picks, but the order already ` +
+          `puts the right player first. No bye stacking, and each fills a slot you need.`
+        : `Nobody in the queue is at real risk over ${wait} picks, no bye stacking, ` +
+          `and each fills a slot you need. Take them in order.`,
     });
   }
 
