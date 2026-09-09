@@ -40,18 +40,54 @@ export async function runOnce(opts: Opts, board?: Board): Promise<void> {
   // Named watchers win over the one-shot context.json when present — they're
   // the ones that keep themselves current.
   const src = await readSources(b.players);
+  const state = await loadState(opts.statePath);
+
+  // Roster first, so a filtered view can still report needs correctly.
+  if (src.roster && src.roster.players.length) {
+    state.myPicks = src.roster.players.map((p) => p.name);
+    for (const p of src.roster.players) {
+      if (!state.drafted.includes(p.name)) state.drafted.push(p.name);
+    }
+    await saveState(opts.statePath, state);
+  }
+
   const cap = src.pool
     ? { title: src.pool.title, text: src.pool.text, capturedAt: src.pool.capturedAt }
     : await readCapture();
+
   if (src.filtered) {
-    console.log(`\n  ⚠️  ${src.filterReason} — ignoring. Click "All Positions" / clear the search.`);
+    // Refusing outright throws away two things we still know: what the filter
+    // is showing, and what the board looked like before it was applied.
+    const pos = src.filteredView?.players[0]?.pos;
+    console.log("\n" + "═".repeat(64));
+    console.log(`  ⚠️  FILTERED VIEW — ${src.filterReason.toUpperCase()}`);
+    console.log(`      This is not the full board. Clear the filter for a complete picture.`);
+    console.log("═".repeat(64));
+
+    if (src.filteredView?.players.length && pos) {
+      const best = [...src.filteredView.players]
+        .filter((p) => !state.drafted.includes(p.name))
+        .sort((a, b) => b.vor - a.vor)
+        .slice(0, 5);
+      console.log(`\n  BEST ${pos} IN THIS VIEW`);
+      for (const p of best) {
+        console.log(`    ${p.name.padEnd(24)} ${p.pos}${p.posRank}  proj ${String(p.proj).padStart(5)}  VOR ${String(p.vor).padStart(6)}`);
+      }
+    }
+
+    const remembered = (state.lastSeen ?? []).filter((n) => !state.drafted.includes(n));
+    if (remembered.length) {
+      const pool = b.players.filter((p) => remembered.includes(p.name));
+      const recs = recommend(b, state, pool, 5);
+      console.log(`\n  FROM THE LAST UNFILTERED VIEW (${remembered.length} players, may be out of date)`);
+      recs.forEach((r, i) => {
+        const p = r.player;
+        console.log(`    ${i + 1}. ${p.name.padEnd(22)} ${p.pos}${p.posRank}  VOR ${p.vor}  — ${r.reasons.join(" · ")}`);
+      });
+      console.log(`\n  Clear the filter for a current board.`);
+    }
     return;
   }
-  if (!cap) {
-    console.error(`no capture at ${CAPTURE_PATH} — is the AgentEyes server running?`);
-    return;
-  }
-  const state = await loadState(opts.statePath);
 
   // Yahoo's markers beat the hand-entered config. Getting teams or slot wrong
   // silently corrupts every "picks until your turn" figure and all the tier
@@ -77,6 +113,11 @@ export async function runOnce(opts: Opts, board?: Board): Promise<void> {
       if (!state.drafted.includes(p.name)) state.drafted.push(p.name);
     }
     await saveState(opts.statePath, state);
+  }
+
+  if (!cap) {
+    console.error(`no capture at ${CAPTURE_PATH} — is the AgentEyes server running?`);
+    return;
   }
 
   // Derive the pick number from the page instead of making the user run `at`.

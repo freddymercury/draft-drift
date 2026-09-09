@@ -51,6 +51,12 @@ export interface Sources {
   /** True when the pool looked filtered (search or position tab) and was rejected. */
   filtered: boolean;
   filterReason: string;
+  /**
+   * The filtered view itself. Rejected as *the pool*, but not worthless — if
+   * someone has filtered to kickers, the best available kickers are very
+   * likely what they want to know.
+   */
+  filteredView: Source | null;
 }
 
 /**
@@ -64,7 +70,7 @@ export async function readSources(board: Player[]): Promise<Sources> {
   try {
     files = (await readdir(WATCH_DIR)).filter((f) => f.endsWith(".json") && f !== "latest.json");
   } catch {
-    return { pool: null, roster: null, queue: null, all: [], filtered: false, filterReason: "" };
+    return { pool: null, roster: null, queue: null, all: [], filtered: false, filterReason: "", filteredView: null };
   }
 
   // A watcher whose page has gone leaves its file behind — the in-page timer
@@ -138,18 +144,21 @@ export async function readSources(board: Player[]): Promise<Sources> {
 
   let filtered = false;
   let filterReason = "";
+  let filteredView: Source | null = null;
   if (pool && isSinglePosition(pool.players)) {
     filtered = true;
     filterReason = `list is filtered to ${pool.players[0]!.pos} only`;
     warn("pool_filtered", { reason: filterReason, n: pool.players.length });
+    filteredView = pool;
     pool = null;
   } else if (pool && (await isFilteredView(pool.players.length))) {
     filtered = true;
     filterReason = "list looks search-filtered";
     warn("pool_filtered", { reason: filterReason, n: pool.players.length });
+    filteredView = pool;
     pool = null;
   }
 
-  return { pool, roster, queue, all, filtered, filterReason };
+  return { pool, roster, queue, all, filtered, filterReason, filteredView };
 
 }
