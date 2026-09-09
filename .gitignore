@@ -1,0 +1,19 @@
+node_modules/
+
+# Fetched upstream data and everything derived from it — regenerate with
+# `bun run all` rather than committing 17MB of projections.
+data/
+board.md
+board.mock.md
+
+# Per-draft run artifacts
+logs/
+*.log
+
+.DS_Store
+
+# Mutable runtime state; the hook defaults to config.json when absent.
+.claude/hooks/active-config
+
+# Your league. Copy from config.example.json; keep your own out of git.
+config.json

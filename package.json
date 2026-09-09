@@ -1,0 +1,21 @@
+{
+  "name": "draft-drift",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "fetch": "bun run src/cli.ts fetch",
+    "build": "bun run src/cli.ts build",
+    "all": "bun run src/cli.ts all",
+    "typecheck": "tsc --noEmit",
+    "watch": "bun run src/cli.ts watch",
+    "rec": "bun run src/cli.ts rec",
+    "pick": "bun run src/cli.ts pick",
+    "reset": "bun run src/cli.ts reset",
+    "at": "bun run src/cli.ts at"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}
