@@ -1,5 +1,5 @@
 import { HARD_INJURY } from "./types";
-import { POSITIONS as POSITION_LIST } from "./types";
+import { positions as POSITION_LIST, sport } from "./sport";
 import type { Board, Config, Player, Position } from "./types";
 import { picksUntilNextTurn, rosterNeed } from "./state";
 import type { DraftState } from "./state";
@@ -14,19 +14,20 @@ export interface Rec {
  * Share of league-wide starting slots belonging to a position — a rough proxy
  * for how fast that position drains while you wait.
  */
-function starterShare(cfg: Config, pos: Position): number {
+export function starterShare(cfg: Config, pos: Position): number {
   const dedicated = (p: Position) => cfg.roster[p] ?? 0;
   const flex = cfg.roster.FLEX ?? 0;
-  const total = POSITION_LIST.reduce((n, p) => n + dedicated(p), 0) + flex;
+  const total = POSITION_LIST().reduce((n, p) => n + dedicated(p), 0) + flex;
   const own = dedicated(pos) + flex * (cfg.flex_split[pos] ?? 0);
   return total > 0 ? own / total : 0;
 }
 
 /** Kickers and defenses are worth nothing until the very end of the draft. */
 function lateOnly(pos: Position, cfg: Config, pickNo: number): boolean {
-  const totalRounds = Object.values(cfg.roster).reduce((a, b) => a + (b ?? 0), 0) - (cfg.roster.IR ?? 0);
+  if (!sport().lateOnly.includes(pos)) return false;
+  const totalRounds = Object.values(cfg.roster).reduce<number>((a, b) => a + (b ?? 0), 0) - (cfg.roster.IR ?? 0);
   const round = Math.ceil(pickNo / cfg.teams);
-  return (pos === "K" || pos === "DEF") && round < totalRounds - 1;
+  return round < totalRounds - 1;
 }
 
 export function recommend(
@@ -114,7 +115,7 @@ export function recommend(
 export function renderRoster(cfg: Config, mine: Player[]): string {
   const { open } = rosterNeed(cfg, mine);
   const lines: string[] = ["ROSTER"];
-  for (const pos of POSITION_LIST) {
+  for (const pos of POSITION_LIST()) {
     const have = mine.filter((p) => p.pos === pos).sort((a, b) => b.proj - a.proj);
     const want = cfg.roster[pos] ?? 0;
     if (!want && !have.length) continue;

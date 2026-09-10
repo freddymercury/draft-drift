@@ -1,4 +1,5 @@
-import { POSITIONS, HARD_INJURY } from "./types";
+import { HARD_INJURY } from "./types";
+import { positions, setSport, sport, sportDir } from "./sport";
 import type { Board, Config, FfcResponse, Player, Position, SleeperProjRow } from "./types";
 import { DATA, ROOT } from "./paths";
 import type { Opts } from "./options";
@@ -22,7 +23,7 @@ const key = (name: string, pos: string) => `${norm(name)}|${pos}`;
 
 type Seed = Omit<
   Player,
-  "posRank" | "vor" | "tier" | "adp" | "adpFormatted" | "adpStdev" | "bye" | "overallRank" | "poolRank" | "valueVsAdp" | "flag"
+  "posRank" | "vor" | "tier" | "eligible" | "adp" | "adpFormatted" | "adpStdev" | "bye" | "overallRank" | "poolRank" | "valueVsAdp" | "flag"
 >;
 
 async function readJson<T>(path: string, hint: string): Promise<T> {
@@ -33,10 +34,10 @@ async function readJson<T>(path: string, hint: string): Promise<T> {
 
 async function loadProjections(): Promise<Map<string, Seed>> {
   const out = new Map<string, Seed>();
-  for (const pos of POSITIONS) {
-    const rows = await readJson<SleeperProjRow[]>(`${DATA}/proj_${pos}.json`, "projections");
+  for (const pos of positions()) {
+    const rows = await readJson<SleeperProjRow[]>(`${sportDir(DATA)}/proj_${pos}.json`, "projections");
     for (const row of rows) {
-      const pts = row.stats?.pts_half_ppr;
+      const pts = row.stats?.[sport().pointsField];
       if (pts == null) continue;
       const p = row.player;
       const name = `${p?.first_name ?? ""} ${p?.last_name ?? ""}`.trim() || String(row.player_id);
@@ -60,7 +61,7 @@ async function loadProjections(): Promise<Map<string, Seed>> {
 export function replacementRanks(cfg: Config): Record<Position, number> {
   const flexTotal = (cfg.roster.FLEX ?? 0) * cfg.teams;
   const out = {} as Record<Position, number>;
-  for (const pos of POSITIONS) {
+  for (const pos of positions()) {
     const starters = (cfg.roster[pos] ?? 0) * cfg.teams + flexTotal * (cfg.flex_split[pos] ?? 0);
     out[pos] = Math.max(1, Math.round(starters) + 1);
   }
@@ -96,9 +97,10 @@ export function assignTiers(players: Player[]): void {
 
 export async function buildBoard(opts: Opts): Promise<Board> {
   const cfg = await readJson<Config>(opts.configPath, "config");
+  setSport(cfg.sport);
   if (opts.teams != null) cfg.teams = opts.teams;
   const seeds = await loadProjections();
-  const adpBlob = await readJson<FfcResponse>(`${DATA}/adp_halfppr.json`, "adp");
+  const adpBlob = await readJson<FfcResponse>(`${sportDir(DATA)}/adp_halfppr.json`, "adp");
   const repl = replacementRanks(cfg);
 
   const adp = new Map<string, FfcResponse["players"][number]>();
@@ -107,10 +109,11 @@ export async function buildBoard(opts: Opts): Promise<Board> {
     adp.set(key(pl.name, pos), pl);
   }
 
-  const byPos = new Map<Position, Player[]>(POSITIONS.map((p) => [p, []]));
+  const byPos = new Map<Position, Player[]>(positions().map((p) => [p, []]));
   for (const s of seeds.values()) {
     byPos.get(s.pos)!.push({
       ...s,
+      eligible: [s.pos],
       posRank: 0, vor: 0, tier: 1,
       adp: null, adpFormatted: null, adpStdev: null, bye: null,
       overallRank: 0, poolRank: null, valueVsAdp: null, flag: "",
@@ -119,13 +122,14 @@ export async function buildBoard(opts: Opts): Promise<Board> {
 
   const replacementPoints = {} as Record<Position, number>;
   const board: Player[] = [];
-  for (const pos of POSITIONS) {
+  for (const pos of positions()) {
     const lst = byPos.get(pos)!;
     lst.sort((a, b) => b.proj - a.proj);
-    replacementPoints[pos] = lst.length ? lst[Math.min(repl[pos], lst.length) - 1]!.proj : 0;
+    const cut = repl[pos] ?? 1;
+    replacementPoints[pos] = lst.length ? lst[Math.min(cut, lst.length) - 1]!.proj : 0;
     lst.forEach((p, i) => {
       p.posRank = i + 1;
-      p.vor = Math.round((p.proj - replacementPoints[pos]) * 10) / 10;
+      p.vor = Math.round((p.proj - (replacementPoints[pos] ?? 0)) * 10) / 10;
     });
     assignTiers(lst);
     board.push(...lst);
@@ -135,23 +139,39 @@ export async function buildBoard(opts: Opts): Promise<Board> {
     const meta = adp.get(key(p.name, p.pos));
     p.adp = meta?.adp ?? null;
     p.adpFormatted = meta?.adp_formatted ?? null;
-    p.bye = meta?.bye ?? null;
+    p.bye = sport().hasByes ? (meta?.bye ?? null) : null;
     p.adpStdev = meta?.stdev ?? null;
   }
 
-  board.sort((a, b) => b.vor - a.vor);
-  board.forEach((p, i) => (p.overallRank = i + 1));
+  // A basketball player comes back once per eligible position, so he is on the
+  // board several times over. Collapse those into the single entry where he is
+  // worth the most; leaving them would double-count him in the overall ranking
+  // and in the ADP pool that valueVsAdp is measured against.
+  const byId = new Map<string, Player[]>();
+  for (const p of board) {
+    const g = byId.get(p.sleeperId);
+    if (g) g.push(p);
+    else byId.set(p.sleeperId, [p]);
+  }
+  const players = [...byId.values()].map((g) => {
+    const best = g.reduce((a, b) => (b.vor > a.vor ? b : a));
+    best.eligible = g.map((x) => x.pos);
+    return best;
+  });
+
+  players.sort((a, b) => b.vor - a.vor);
+  players.forEach((p, i) => (p.overallRank = i + 1));
 
   // Compare like-for-like: my rank among players the market actually drafts, vs
   // their ADP pick. Ranking against all ~630 makes everyone deep on the board
   // look contested, since ADP tops out near pick 180.
-  const pool = board.filter((p) => p.adp != null);
+  const pool = players.filter((p) => p.adp != null);
   pool.forEach((p, i) => {
     p.poolRank = i + 1;
     p.valueVsAdp = Math.round((p.adp! - (i + 1)) * 10) / 10;
   });
 
-  for (const p of board) {
+  for (const p of players) {
     const inj = p.injuryStatus && HARD_INJURY.has(p.injuryStatus) ? p.injuryStatus : null;
     // A 15-pick gap in round 2 is a real disagreement; in round 14 it is noise.
     const contested = p.valueVsAdp != null && p.valueVsAdp < -Math.max(15, 0.35 * p.adp!);
@@ -164,17 +184,17 @@ export async function buildBoard(opts: Opts): Promise<Board> {
     adpSource: adpBlob.meta,
     replacementRanks: repl,
     replacementPoints,
-    players: board,
+    players,
   };
 }
 
 export function renderMarkdown(b: Board): string {
   const m = b.adpSource;
   const lines = [
-    `# Draft Board — ${b.config.scoring}, ${b.config.teams} teams`,
+    `# Draft Board — ${(b.config.sport ?? "nfl").toUpperCase()}, ${b.config.scoring}, ${b.config.teams} teams`,
     `_generated ${b.generatedAt} · ADP from ${m?.total_drafts} drafts (${m?.start_date} → ${m?.end_date})_`,
     "",
-    "Replacement level: " + POSITIONS.map((p) => `${p}${b.replacementRanks[p]}`).join(", "),
+    "Replacement level: " + positions().map((p) => `${p}${b.replacementRanks[p]}`).join(", "),
     "",
     "| # | Player | Pos | Tm | Proj | VOR | Tier | ADP | Val | Bye | Flag |",
     "|--:|---|---|---|--:|--:|:-:|--:|--:|--:|---|",

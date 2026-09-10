@@ -4,6 +4,8 @@ import { loadState, saveState } from "./state";
 import { watch, runOnce } from "./watch";
 import { serve } from "./serve";
 import { parseFlags } from "./options";
+import { setSport } from "./sport";
+import type { Sport } from "./types";
 
 const USAGE = `usage: bun run src/cli.ts [--config <path>] [--teams <n>] <command>
 
@@ -35,7 +37,8 @@ const tag = opts.label ? `[${opts.label}] ` : "";
 
 switch (cmd) {
   case "fetch": {
-    const cfg = (await Bun.file(opts.configPath).json()) as { season?: string };
+    const cfg = (await Bun.file(opts.configPath).json()) as { season?: string; sport?: Sport };
+    setSport(cfg.sport);
     await fetchAll(cfg.season);
     break;
   }
@@ -45,7 +48,8 @@ switch (cmd) {
   case "all": {
     // Read the config directly; buildBoard would fail here on a first run,
     // before any projections have been fetched.
-    const cfg = (await Bun.file(opts.configPath).json()) as { season?: string };
+    const cfg = (await Bun.file(opts.configPath).json()) as { season?: string; sport?: Sport };
+    setSport(cfg.sport);
     await fetchAll(cfg.season);
     await writeBoard(await buildBoard(opts), opts);
     break;

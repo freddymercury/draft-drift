@@ -1,5 +1,54 @@
-export const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"] as const;
-export type Position = (typeof POSITIONS)[number];
+export type Sport = "nfl" | "nba";
+
+/**
+ * Everything that differs between sports, in one place.
+ *
+ * The board maths — replacement level, tiers, VOR — is sport-agnostic. What
+ * changes is which positions exist, where the numbers come from, and whether a
+ * projection is a season total or a per-game rate.
+ */
+export interface SportProfile {
+  sport: Sport;
+  positions: readonly string[];
+  /** Sleeper's field for fantasy points under this sport's default scoring. */
+  pointsField: string;
+  /** Sleeper's ADP field, when the sport has one. */
+  adpField?: string;
+  /** Season totals (NFL) or per-game rates (NBA) — affects nothing but wording. */
+  scale: "season" | "per_game";
+  /** Football has bye weeks; basketball does not. */
+  hasByes: boolean;
+  /** Positions worth nothing until the last rounds (kickers, defenses). */
+  lateOnly: readonly string[];
+  /** Where ADP comes from: FantasyFootballCalculator, or Sleeper's own field. */
+  adpSource: "ffc" | "sleeper";
+}
+
+export const SPORTS: Record<Sport, SportProfile> = {
+  nfl: {
+    sport: "nfl",
+    positions: ["QB", "RB", "WR", "TE", "K", "DEF"],
+    pointsField: "pts_half_ppr",
+    scale: "season",
+    hasByes: true,
+    lateOnly: ["K", "DEF"],
+    adpSource: "ffc",
+  },
+  nba: {
+    sport: "nba",
+    positions: ["PG", "SG", "SF", "PF", "C"],
+    pointsField: "pts_std",
+    // No FantasyFootballCalculator equivalent, so ADP comes from Sleeper.
+    adpField: "adp_std",
+    scale: "per_game",
+    hasByes: false,
+    lateOnly: [],
+    adpSource: "sleeper",
+  },
+};
+
+export const POSITIONS = SPORTS.nfl.positions;
+export type Position = string;
 
 /** "Questionable" is a stale week-level tag in Sleeper's preseason DB — it sits
  *  on fully-projected studs (Nacua, Chase, McCaffrey) and carries no signal. */
@@ -18,6 +67,8 @@ export interface Config {
   my_draft_slot: number | null;
   /** Pin the NFL season. Omit to resolve it from Sleeper at fetch time. */
   season?: string;
+  /** Which sport. Defaults to nfl for every config written before this existed. */
+  sport?: Sport;
   scoring_detail?: unknown;
 }
 
@@ -36,11 +87,13 @@ export interface SleeperProjRow {
 export interface FfcPlayer {
   name: string;
   position: string;
-  team: string;
+  // Nullable because the Sleeper-derived envelope (non-NFL sports) has no bye
+  // weeks and does not always carry a team.
+  team: string | null;
   adp: number;
   adp_formatted: string;
   stdev: number;
-  bye: number;
+  bye: number | null;
 }
 
 export interface FfcResponse {
@@ -51,6 +104,8 @@ export interface FfcResponse {
 export interface Player {
   name: string;
   pos: Position;
+  /** Every position this player is draftable at. One entry outside basketball. */
+  eligible: Position[];
   team: string | null;
   proj: number;
   injuryStatus: string | null;
