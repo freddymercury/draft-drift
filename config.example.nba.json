@@ -1,0 +1,37 @@
+{
+  "league_name": "Your NBA league",
+  "league_id": "",
+  "draft_time": "",
+  "pick_clock_seconds": 60,
+  "teams": 12,
+  "sport": "nba",
+  "season": "2025",
+  "scoring": "points",
+  "roster": {
+    "PG": 1,
+    "SG": 1,
+    "SF": 1,
+    "PF": 1,
+    "C": 2,
+    "FLEX": 4,
+    "BN": 3
+  },
+  "flex_eligible": [
+    "PG",
+    "SG",
+    "SF",
+    "PF",
+    "C"
+  ],
+  "flex_split": {
+    "PG": 0.2,
+    "SG": 0.2,
+    "SF": 0.2,
+    "PF": 0.2,
+    "C": 0.2
+  },
+  "my_draft_slot": null,
+  "scoring_detail": {
+    "notes": "season is pinned to 2025 because Sleeper has not published 2026 NBA projections (788 rows, 1 with pts_std, season_type 'off'). Sleeper NBA pts_std is PER GAME, not a season total, so VOR is a per-game margin. ADP comes from Sleeper adp_std -- FantasyFootballCalculator is football-only."
+  }
+}

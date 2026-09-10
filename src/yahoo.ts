@@ -1,8 +1,8 @@
-import { POSITIONS } from "./types";
+import { positions } from "./sport";
 import type { Player, Position } from "./types";
 import { norm } from "./board";
 
-const POS_SET = new Set<string>(POSITIONS);
+const posSet = () => new Set<string>(positions());
 /** Short status markers Yahoo interleaves between the name and the position. */
 const MARKERS = new Set(["Q", "D", "O", "P", "IR", "SUS", "NA", "PUP", "DTD", "GTD"]);
 
@@ -12,6 +12,8 @@ export interface YahooRow {
   initial: string;
   lastPart: string;
   pos: Position;
+  /** Every position Yahoo lists for the row. Basketball rows are "PG,SG". */
+  posList: string[];
   team: string;
   bye: number | null;
   /** Yahoo's own ADP from the stats row, used to break name collisions. */
@@ -33,6 +35,7 @@ export interface YahooRow {
 export function parseRows(text: string): YahooRow[] {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const rows: YahooRow[] = [];
+  const POS_SET = posSet();
 
   for (let i = 0; i < lines.length; i++) {
     const name = lines[i]!;
@@ -46,20 +49,32 @@ export function parseRows(text: string): YahooRow[] {
 
     let j = i + 1;
     while (j < lines.length && MARKERS.has(lines[j]!)) j++;
-    const pos = lines[j];
-    if (!pos || !POS_SET.has(pos)) continue;
+    const posLine = lines[j];
+    // Basketball lists multiple eligible positions on one line ("PG,SG");
+    // football lists exactly one. Split first, then require every token to be
+    // a real position so stray text can't pass as a row.
+    const posList = (posLine ?? "").split(/[,/]/).map((x) => x.trim()).filter(Boolean);
+    if (!posList.length || !posList.every((x) => POS_SET.has(x))) continue;
+    const pos = posList[0]!;
     const team = lines[j + 1];
     if (!team || !/^[A-Za-z]{2,3}$/.test(team)) continue;
     // A roster pane lists empty slots as bare position labels ("WR" under
     // "QB"); a real row always has a team here, never another position.
     if (POS_SET.has(team)) continue;
-    const byeLine = lines[j + 2] ?? "";
-    const bye = /^Bye\s+(\d+)$/.exec(byeLine);
+    // Below the team comes an optional bye line and, in some layouts, more
+    // status markers before the stats row. Walk past both rather than assuming
+    // a fixed offset: sports without bye weeks put the stats row right here.
+    let k = j + 2;
+    while (k < lines.length && MARKERS.has(lines[k]!)) k++;
+    const bye = /^Bye\s+(\d+)$/.exec(lines[k] ?? "");
+    if (bye) k++;
+    while (k < lines.length && MARKERS.has(lines[k]!)) k++;
+    const statAt = k;
 
     // The stats row after the bye is "<XRank>\t<ADP>\t<Bye>\t<Proj>…".
     // Two players can share an initial, surname, position and team
     // (B. Robinson / RB / Atl is both Bijan and Brian), so ADP is the tiebreak.
-    const statLine = lines[j + 3] ?? "";
+    const statLine = lines[statAt] ?? "";
     const stats = statLine.split(/\t+/).map((x) => x.trim()).filter(Boolean);
     const adpRaw = stats.length >= 2 ? Number(stats[1]) : NaN;
     const yahooAdp = Number.isFinite(adpRaw) ? adpRaw : null;
@@ -73,11 +88,12 @@ export function parseRows(text: string): YahooRow[] {
       initial: n.slice(0, space),
       lastPart: n.slice(space + 1),
       pos: pos as Position,
+      posList,
       team: team.toUpperCase(),
       bye: bye ? Number(bye[1]) : null,
       yahooAdp,
     });
-    i = j + 2;
+    i = statAt - 1;
   }
   return rows;
 }
@@ -90,7 +106,7 @@ export function matchRows(rows: YahooRow[], board: Player[]): { matched: Player[
 
   for (const r of rows) {
     const cands = board.filter((p) => {
-      if (p.pos !== r.pos) return false;
+      if (!r.posList.includes(p.pos)) return false;
       const n = norm(p.name);
       const first = n.slice(0, n.indexOf(" "));
       // r.initial is "j" from "J. Gibbs" or "jahmyr" from a spelled-out name

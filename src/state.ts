@@ -1,4 +1,4 @@
-import { POSITIONS } from "./types";
+import { positions } from "./sport";
 import type { Config, Player, Position } from "./types";
 
 export interface DraftState {
@@ -57,7 +57,7 @@ export interface SlotNeed {
 export function rosterNeed(cfg: Config, mine: Player[]): SlotNeed {
   const open: Partial<Record<Position | "FLEX", number>> = {};
   const best: Partial<Record<Position, number[]>> = {};
-  for (const pos of POSITIONS) {
+  for (const pos of positions()) {
     const have = mine.filter((p) => p.pos === pos).sort((a, b) => b.proj - a.proj);
     best[pos] = have.map((p) => p.proj);
     open[pos] = Math.max(0, (cfg.roster[pos] ?? 0) - have.length);

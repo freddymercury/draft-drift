@@ -1,7 +1,7 @@
 import type { Board, Player } from "./types";
 import type { DraftState } from "./state";
 import { rosterNeed } from "./state";
-import { recommend } from "./recommend";
+import { recommend, starterShare } from "./recommend";
 
 export interface QueueNote {
   /** "reorder" changes what you take next; "angle" is context that might. */
@@ -27,11 +27,13 @@ export interface QueueAnalysis {
  * enough to separate "he will last" from "he will not", which is the only
  * question that changes a queue's order.
  */
-function survival(p: Player, available: Player[], wait: number, teams: number): number {
+function survival(p: Player, board: Board, available: Player[], wait: number, teams: number): number {
   if (wait <= 0) return 1;
   const tierLeft = available.filter((o) => o.pos === p.pos && o.tier === p.tier).length;
-  // Share of picks that tend to go to this position, crudely by starter demand.
-  const share = p.pos === "RB" || p.pos === "WR" ? 0.3 : p.pos === "TE" || p.pos === "QB" ? 0.1 : 0.05;
+  // Share of picks that tend to go to this position, by starter demand. Taken
+  // from the roster config rather than a table of football positions, so this
+  // holds for any sport.
+  const share = starterShare(board.config, p.pos);
   const expectedGone = wait * share;
   if (expectedGone <= 0) return 1;
   // Where the player sits inside his tier matters: the best of five goes first.
@@ -67,7 +69,7 @@ export function analyzeQueue(
     pos: `${p.pos}${p.posRank}`,
     vor: p.vor,
     score: scoreOf.get(p.name) ?? 0,
-    survival: survival(p, available, wait, board.config.teams),
+    survival: survival(p, board, available, wait, board.config.teams),
   }));
 
   const recommendedOrder = [...queued].sort((a, b) => (scoreOf.get(b.name) ?? 0) - (scoreOf.get(a.name) ?? 0));
